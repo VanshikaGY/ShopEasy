@@ -1,0 +1,146 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "siteName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Azure Web App"
+            }
+        },
+        "hostingPlanName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the hosting plan"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources"
+            }
+        }
+    },
+    "variables": {
+        "storageAccountName": "[concat('storage', uniqueString(resourceGroup().id))]",
+        "applicationInsightsName": "[concat('insights', uniqueString(resourceGroup().id))]",
+        "cosmosDBAccountName": "[concat('cosmos', uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('hostingPlanName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "S1",
+                "tier": "Standard"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('siteName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]",
+                "siteConfig": {
+                    "webSocketsEnabled": true,
+                    "cors": {
+                        "allowedOrigins": ["*"]
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-06-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "supportsHttpsTrafficOnly": true
+            }
+        },
+        {
+            "type": "Microsoft.DocumentDB/databaseAccounts",
+            "apiVersion": "2021-06-15",
+            "name": "[variables('cosmosDBAccountName')]",
+            "location": "[parameters('location')]",
+            "kind": "GlobalDocumentDB",
+            "properties": {
+                "databaseAccountOfferType": "Standard",
+                "locations": [
+                    {
+                        "locationName": "[parameters('location')]",
+                        "failoverPriority": 0
+                    }
+                ],
+                "consistencyPolicy": {
+                    "defaultConsistencyLevel": "Session"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('applicationInsightsName')]",
+            "location": "[parameters('location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "Flow_Type": "Redfield",
+                "Request_Source": "IbizaAIExtension"
+            }
+        },
+        {
+            "type": "Microsoft.CognitiveServices/accounts",
+            "apiVersion": "2021-04-30",
+            "name": "[concat('search-', parameters('siteName'))]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "S1"
+            },
+            "kind": "CognitiveServices",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Cache/Redis",
+            "apiVersion": "2021-06-01",
+            "name": "[concat('cache-', parameters('siteName'))]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "sku": {
+                    "name": "Basic",
+                    "family": "C",
+                    "capacity": 0
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "webAppUrl": {
+            "type": "string",
+            "value": "[concat('https://', parameters('siteName'), '.azurewebsites.net')]"
+        },
+        "storageAccountName": {
+            "type": "string",
+            "value": "[variables('storageAccountName')]"
+        },
+        "cosmosDBEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('cosmosDBAccountName')).documentEndpoint]"
+        },
+        "applicationInsightsKey": {
+            "type": "string",
+            "value": "[reference(variables('applicationInsightsName')).InstrumentationKey]"
+        }
+    }
+} 
